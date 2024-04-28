@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  name       String
+  photoUrl   String   @map(name: "photo_url")
+  active     Boolean
+  lastActive DateTime @updatedAt @map(name: "last_active")
+  createdAt  DateTime @default(now()) @map(name: "created_at")
+
+  GroupExpenseCreditor GroupExpenseCreditor[]
+  GroupExpenseDebtor   GroupExpenseDebtor[]
+  GroupMember          GroupMember[]
+  GroupExpense         GroupExpense[]
+}
+
+model Group {
+  id          Int      @id @default(autoincrement())
+  name        String
+  createdAt   DateTime @default(now()) @map(name: "created_at")
+  description String?
+
+  GroupExpense        GroupExpense[]
+  GroupInvitation     GroupInvitation[]
+  GroupInvitationLink GroupInvitationLink?
+  GroupMember         GroupMember[]
+}
+
+model GroupRole {
+  id          Int    @id @default(autoincrement())
+  name        String
+  description String
+
+  canRemoveMembers Boolean @default(false) @map(name: "can_remove_members")
+  canAddMembers    Boolean @default(false) @map(name: "can_add_members")
+  canDestroyGroup  Boolean @default(false) @map(name: "can_destroy_group")
+  canEditGroup     Boolean @default(false) @map(name: "can_edit_group")
+  canAddExpenses   Boolean @default(false) @map(name: "can_add_expenses")
+
+  GroupMember GroupMember[]
+}
+
+model GroupMember {
+  createdAt DateTime @default(now()) @map(name: "created_at")
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @map(name: "user_id")
+
+  group   Group @relation(fields: [groupId], references: [id])
+  groupId Int   @map(name: "group_id")
+
+  role   GroupRole @relation(fields: [roleId], references: [id])
+  roleId Int       @map(name: "role_id")
+
+  @@id([groupId, userId])
+}
+
+model GroupInvitation {
+  userEmail      String   @map(name: "user_email")
+  expirationTime DateTime @map(name: "expiration_time")
+  createdAt      DateTime @default(now()) @map(name: "created_at")
+
+  group   Group @relation(fields: [groupId], references: [id])
+  groupId Int   @map(name: "group_id")
+
+  @@id([groupId, userEmail])
+}
+
+model GroupInvitationLink {
+  createdAt DateTime @default(now()) @map(name: "created_at")
+  joinLink  String   @map(name: "join_link")
+
+  group   Group @relation(fields: [groupId], references: [id])
+  groupId Int   @unique @map(name: "group_id")
+
+  @@id([groupId])
+}
+
+model Currency {
+  code         String         @id @unique
+  name         String
+  GroupExpense GroupExpense[]
+}
+
+model GroupExpense {
+  id        Int      @id @default(autoincrement())
+  name      String
+  amount    BigInt
+  createdAt DateTime @default(now()) @map(name: "created_at")
+  updatedAt DateTime @updatedAt @map(name: "updated_at")
+
+  group   Group @relation(fields: [groupId], references: [id])
+  groupId Int
+
+  creditor   User @relation(fields: [creditorId], references: [id])
+  creditorId Int
+
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+  currencyCode String
+
+  GroupExpenseDebtor GroupExpenseDebtor[]
+}
+
+model GroupExpenseDebtor {
+  amount   BigInt
+  resolved Boolean @default(false)
+
+  groupExpense   GroupExpense @relation(fields: [groupExpenseId], references: [id])
+  groupExpenseId Int
+
+  reducedBy GroupExpense[]
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @map(name: "user_id")
+
+  @@id([groupExpenseId, userId])
+}
+

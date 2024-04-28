@@ -1,3 +1,6 @@
+secret_key
+certificates
+.DS_Store
 # Logs
 logs
 *.log
