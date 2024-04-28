@@ -42,7 +42,7 @@ describe('DebtSimplifier', () => {
     expect(creditors.get('B')?.get('A')?.owes).toBe(0);
   });
 
-  it('should cover as much small transactions as possible', () => {
+  it('should cover as much small transactions as possible when can cover all', () => {
     debtSimplifier.add('A', 'B', 7, idGen.next().value);
     debtSimplifier.add('A', 'B', 3, idGen.next().value);
     debtSimplifier.add('A', 'B', 2, idGen.next().value);
@@ -64,6 +64,56 @@ describe('DebtSimplifier', () => {
     expect(bDebts.find((e) => e.expenseId === 2).history.at(-1).amount).toBe(0);
     expect(bDebts.find((e) => e.expenseId === 3).history.at(-1).amount).toBe(0);
     expect(bDebts.find((e) => e.expenseId === 4).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 5).history.at(-1).amount).toBe(1);
+  });
+
+  it('should cover as much small transactions as possible when can cover some', () => {
+    debtSimplifier.add('A', 'B', 7, idGen.next().value);
+    debtSimplifier.add('A', 'B', 2, idGen.next().value);
+    debtSimplifier.add('A', 'B', 2, idGen.next().value);
+    debtSimplifier.add('A', 'B', 1, idGen.next().value);
+    debtSimplifier.add('A', 'B', 1, idGen.next().value);
+    debtSimplifier.add('A', 'B', 1, idGen.next().value);
+    debtSimplifier.add('B', 'A', 7, idGen.next().value);
+
+    const creditors = debtSimplifier.getCreditors();
+
+    expect(creditors.get('A')?.get('B')?.owes).toBe(7);
+    expect(creditors.get('B')?.get('A')?.owes).toBe(0);
+
+    const bDebts = creditors.get('A')?.get('B').debts;
+
+    expect(bDebts.length).toBe(6);
+    expect(bDebts.find((e) => e.expenseId === 0).history.at(-1).amount).toBe(7);
+    expect(bDebts.find((e) => e.expenseId === 1).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 2).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 3).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 4).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 5).history.at(-1).amount).toBe(0);
+  });
+
+  it('should cover as much small transactions as possible when can cover some, and partial', () => {
+    debtSimplifier.add('A', 'B', 7, idGen.next().value);
+    debtSimplifier.add('A', 'B', 2, idGen.next().value);
+    debtSimplifier.add('A', 'B', 2, idGen.next().value);
+    debtSimplifier.add('A', 'B', 1, idGen.next().value);
+    debtSimplifier.add('A', 'B', 1, idGen.next().value);
+    debtSimplifier.add('A', 'B', 1, idGen.next().value);
+    debtSimplifier.add('B', 'A', 11, idGen.next().value);
+
+    const creditors = debtSimplifier.getCreditors();
+
+    expect(creditors.get('A')?.get('B')?.owes).toBe(3);
+    expect(creditors.get('B')?.get('A')?.owes).toBe(0);
+
+    const bDebts = creditors.get('A')?.get('B').debts;
+
+    expect(bDebts.length).toBe(6);
+    expect(bDebts.find((e) => e.expenseId === 0).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 1).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 2).history.at(-1).amount).toBe(0);
+    expect(bDebts.find((e) => e.expenseId === 3).history.at(-1).amount).toBe(1);
+    expect(bDebts.find((e) => e.expenseId === 4).history.at(-1).amount).toBe(1);
     expect(bDebts.find((e) => e.expenseId === 5).history.at(-1).amount).toBe(1);
   });
 

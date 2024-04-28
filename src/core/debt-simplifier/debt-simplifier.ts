@@ -279,6 +279,10 @@ export class DebtSimplifier {
       return -1;
     }
 
+    if (value > 1) {
+      value -= 1;
+    }
+
     // Extended binary search.
     while (start <= end) {
       const mid = start + Math.floor((end - start) / 2);
