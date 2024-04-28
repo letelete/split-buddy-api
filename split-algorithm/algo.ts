@@ -205,21 +205,11 @@ class DebtSimplifier {
     if (!debt) {
       throw new Error(`Debt for expense ${toExpenseId} has not been created.`);
     }
-
-    const previousHistoryEntry = debt.history.at(-1);
-    if (previousHistoryEntry) {
-      debt.history.push({
-        expenseId: fromExpenseId,
-        grants,
-        amount: previousHistoryEntry.amount + grants,
-      });
-    } else {
-      debt.history.push({
-        expenseId: fromExpenseId,
-        grants,
-        amount: grants,
-      });
-    }
+    debt.history.push({
+      expenseId: fromExpenseId,
+      grants,
+      amount: debtor.owes + grants,
+    });
 
     debtor.owes += grants;
 
@@ -391,5 +381,3 @@ console.log(
   Bob,
   debtSimplifier.getCreditors().get(Bob)?.get(John)?.owes,
 );
-
-// console.log(debtSimplifier.findRightmostIndex(6, [0, 10], (item) => item));
