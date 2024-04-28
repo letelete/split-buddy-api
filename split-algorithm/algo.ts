@@ -75,8 +75,6 @@ class DebtSimplifier {
       debtorOwes,
     );
 
-    this.sortDebtsAscending(creditorId, debtorId);
-
     this.simplify(creditorId, debtorId);
   }
 
@@ -110,6 +108,8 @@ class DebtSimplifier {
       );
     }
 
+    this.sortDebtsAscending(creditorId, debtorId);
+
     // Always take the most expensive debt
     const debtA = A.debts.at(-1);
 
@@ -122,29 +122,27 @@ class DebtSimplifier {
 
     let X = this.getDebtAmount(debtA);
 
+    const debtBRightmostIndexForX = this.findRightmostIndex(
+      X,
+      B.debts,
+      this.getDebtAmount,
+    );
+    let debtBIndex = debtBRightmostIndexForX;
+    let debtBIndexPrefixSum = B.debts
+      .slice(0, debtBIndex)
+      .reduce((sum, debt) => sum + this.getDebtAmount(debt), 0);
+
     while (X > 0) {
-      console.log({ X });
-      const debtBIndex = this.findRightmostIndex(
-        X,
-        B.debts,
-        this.getDebtAmount,
-      );
-      if (debtBIndex === -1) {
-        console.debug(
-          `Tried to simplify debt (${creditorId}<->${debtorId}), but X=${X} has no matching indexes in B's debts (${B.debts})`,
-        );
+      if (debtBIndex === -1 || debtBIndex < 0) {
         break;
       }
-
       const debtB = B.debts[debtBIndex];
-
       const Y = this.getDebtAmount(debtB);
       if (Y <= 0) {
-        console.debug(
-          `Tried to simplify debt (${creditorId}<->${debtorId}), but got Y=0.`,
-        );
         break;
       }
+
+      debtBIndexPrefixSum -= Y;
 
       const newY = Math.max(Y - X, 0);
       const newX = X - (Y - newY);
@@ -164,15 +162,13 @@ class DebtSimplifier {
         amount: Y + grants,
       });
 
-      console.debug(
-        `Simplified debts (${creditorId}<->${debtorId}}):`,
-        this.getDebtor(creditorId, debtorId),
-        this.getDebtor(debtorId, creditorId),
-      );
-
       X = newX;
-
-      this.sortDebtsAscending(creditorId, debtorId);
+      // Cover as much small expenses as possible. Otherwise, add to the next closest expense.
+      if (debtBIndexPrefixSum > 0) {
+        debtBIndex--;
+      } else {
+        debtBIndex = Math.min(debtBRightmostIndexForX + 1, B.debts.length - 1);
+      }
     }
   }
 
