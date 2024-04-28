@@ -1,6 +1,10 @@
-type ExpenseId = number;
-type CreditorId = string;
-type DebtorId = string;
+import { nestedMapReplacer, nestedMapReviver } from '../../utils/json';
+
+export type ExpenseId = number;
+
+export type CreditorId = string;
+
+export type DebtorId = string;
 
 interface DebtTransaction {
   expenseId: ExpenseId;
@@ -8,57 +12,37 @@ interface DebtTransaction {
   amount: number;
 }
 
-interface Debt {
+export interface Debt {
   expenseId: ExpenseId;
   history: DebtTransaction[];
 }
 
-interface Debtor {
+export interface Debtor {
   owes: number;
   debts: Debt[];
 }
 
-type DebtorsMap = Map<DebtorId, Debtor>;
+export type DebtorsMap = Map<DebtorId, Debtor>;
 
-type CreditorsMap = Map<CreditorId, DebtorsMap>;
+export type CreditorsMap = Map<CreditorId, DebtorsMap>;
 
-class DebtSimplifier {
+export class DebtSimplifier {
   private creditors: CreditorsMap = new Map();
 
   constructor() {}
 
-  initializeCreditors(creditors: CreditorsMap) {
-    this.creditors = new Map(creditors);
+  toJSON() {
+    return JSON.stringify(this.creditors, nestedMapReplacer);
   }
 
-  /**
-   * __START__: User A creates an expense Eid1, where they grant user B: X$ in form of a debt
-   * 1. Upserts a relation A->B in the HashMap of creditors for A, where:
-   * ```
-   * const Creditors = {
-   *   A: {
-   *     B: {
-   *       owes: owes + X$,
-   *       debts: [
-   *         { expense: Eid1, history: [{ expense: Eid1, grants: +X$, amount: +X$ }] },
-   *       ],
-   *     },
-   *   },
-   * };
-   * ```
-   * 2. Creates a relation B->A in the HashMap of creditors for B, where (or do nothing if relation B->A already exists):
-   *```
-   * const Creditors = {
-   *   B: {
-   *     A: {
-   *       owes: 0,
-   *       debts: [],
-   *     },
-   *   },
-   * };
-   *```
-   * __END__
-   */
+  fromJSON(json: string) {
+    this.creditors = JSON.parse(json, nestedMapReviver);
+  }
+
+  getCreditors() {
+    return this.creditors;
+  }
+
   add(
     creditorId: CreditorId,
     debtorId: DebtorId,
@@ -82,20 +66,21 @@ class DebtSimplifier {
    * # Algorithm:
    *
    * __START__
-   * 1. Try to simplify debt of B. In the relation A->B:
-   *    Take the last record in the history with amount X$, where X$ > 0.
-   *    In the relation B->A, take the first debt with expenseId Eid2,
-   *    and amount Y$, where Y$ > 0$, such that X$ = Y$ + p, where p is minimal (closest to 0).
-   * 2. Calculate new amount Ynew$, where Ynew$ = max(Y$ - X$, 0)
-   * 3. Calculate new amount Xnew$, where Xnew$ = X$ - (Y$ - Y$new)
-   * 4. Calculate grants amount G, where G = -1 * (X$ - Xnew$)
-   * 5. Add the new amount Xnew$ to the history of Eid1.
-   *    In the relation A->B, push `{ expense: Eid2, grants: G, amount: amount + grants }`.
-   *    Update B's owes = owes + G.
-   * 6. Add the new amount Ynew$ to the history of Eid2.
-   *    In the relation B->A, push `{ expense: Eid1, grants: G, amount: amount + grants }`.
-   *    Update A's owes = owes + G.
-   * 7. If Xnew$ > 0, repeat from (1)
+   * 1. Try to simplify debt of `B`. In the relation `A->B`:
+   *    Take the most expensive debt in the history with amount `X`, where `X > 0`.
+   *    In the relation `B->A`, take the first debt with expense id of `expenseId_A`,
+   *    and amount `Y`, where `Y > 0`, such that `X = Y + p`, where `p` is minimal (closest to 0).
+   * 2. Calculate new amount `newY`, where `newY = max(Y - X, 0)`.
+   * 3. Calculate new amount newX, where `newX = X - (Y - Ynew)`.
+   * 4. Calculate `grants` amount, where `grants = -1 * (X - newX)`.
+   * 5. Add the new amount `newX` to the history of `expenseId_B`.
+   *    In the relation `A->B`, push `{ expense: expenseId_A, grants: grants, amount: amount + grants }`.
+   *    Update `B`'s owes to be `owes = owes + grants`.
+   * 6. Add the new amount `newY` to the history of expenseId_A.
+   *    In the relation `B->A`, push `{ expense: expenseId_B, grants: grants, amount: amount + grants }`.
+   *    Update `A`'s owes to be `owes = owes + grants`.
+   * 7. If `newX > 0`, repeat from (1)
+   *
    * __END__
    */
   private simplify(creditorId: CreditorId, debtorId: DebtorId) {
@@ -112,16 +97,11 @@ class DebtSimplifier {
 
     // Always take the most expensive debt
     const debtA = A.debts.at(-1);
-
     if (!debtA) {
-      console.debug(
-        `Cannot simplify a debt that does not exist (${creditorId}<->${debtorId}).`,
-      );
       return;
     }
 
     let X = this.getDebtAmount(debtA);
-
     const debtBRightmostIndexForX = this.findRightmostIndex(
       X,
       B.debts,
@@ -133,9 +113,10 @@ class DebtSimplifier {
       .reduce((sum, debt) => sum + this.getDebtAmount(debt), 0);
 
     while (X > 0) {
-      if (debtBIndex === -1 || debtBIndex < 0) {
+      if (debtBIndex < 0) {
         break;
       }
+
       const debtB = B.debts[debtBIndex];
       const Y = this.getDebtAmount(debtB);
       if (Y <= 0) {
@@ -163,6 +144,7 @@ class DebtSimplifier {
       });
 
       X = newX;
+
       // Cover as much small expenses as possible. Otherwise, add to the next closest expense.
       if (debtBIndexPrefixSum > 0) {
         debtBIndex--;
@@ -170,10 +152,6 @@ class DebtSimplifier {
         debtBIndex = Math.min(debtBRightmostIndexForX + 1, B.debts.length - 1);
       }
     }
-  }
-
-  getCreditors() {
-    return this.creditors;
   }
 
   private upsertDebtTransaction(
@@ -205,6 +183,7 @@ class DebtSimplifier {
     if (!debt) {
       throw new Error(`Debt for expense ${toExpenseId} has not been created.`);
     }
+
     debt.history.push({
       expenseId: fromExpenseId,
       grants,
@@ -212,11 +191,6 @@ class DebtSimplifier {
     });
 
     debtor.owes += grants;
-
-    console.debug(
-      `Upserted debt transaction (${creditorId}->${debtorId}}):`,
-      this.getDebtor(creditorId, debtorId),
-    );
   }
 
   private ensureTwoWayRelation(creditorId: CreditorId, debtorId: DebtorId) {
@@ -235,11 +209,6 @@ class DebtSimplifier {
 
   private initializeEmptyCreditor(creditorId: CreditorId) {
     this.creditors.set(creditorId, new Map());
-
-    console.debug(
-      `Initialized empty creditor (${creditorId}):`,
-      this.creditors.get(creditorId),
-    );
   }
 
   private initializeEmptyDebtor(creditorId: CreditorId, debtorId: DebtorId) {
@@ -253,11 +222,6 @@ class DebtSimplifier {
     }
 
     creditor.set(debtorId, { owes: 0, debts: [] });
-
-    console.debug(
-      `Initialized empty debtor (${creditorId}->${debtorId}):`,
-      this.creditors.get(creditorId)?.get(debtorId),
-    );
   }
 
   private sortDebtsAscending(creditorId: CreditorId, debtorId: DebtorId) {
@@ -293,7 +257,7 @@ class DebtSimplifier {
     return creditor.has(debtorId);
   }
 
-  findRightmostIndex<T>(
+  private findRightmostIndex<T>(
     value: number,
     sortedArray: T[],
     getValue: (item: T) => number,
@@ -329,55 +293,3 @@ class DebtSimplifier {
       : finalIndex;
   }
 }
-
-const debtSimplifier = new DebtSimplifier();
-console.log("--- creditors before ---\n", debtSimplifier.getCreditors());
-
-const Bob = "Bob";
-const Alice = "Alice";
-const John = "John";
-const expenses = [
-  [Bob, Alice, 10],
-  [Bob, Alice, 7],
-  [Alice, Bob, 5],
-  [Alice, Bob, 8],
-  [Bob, Alice, 17],
-  [John, Bob, 5],
-  [Alice, John, 8],
-  [John, Alice, 17],
-] as const satisfies [CreditorId, DebtorId, number][];
-
-expenses.forEach(([creditorId, debtorId, debtorOwes], index) =>
-  debtSimplifier.add(creditorId, debtorId, debtorOwes, index + 1),
-);
-
-console.log(
-  "final debt",
-  Alice,
-  "\n->",
-  Bob,
-  debtSimplifier.getCreditors().get(Bob)?.get(Alice)?.owes,
-  "\n->",
-  John,
-  debtSimplifier.getCreditors().get(John)?.get(Alice)?.owes,
-);
-console.log(
-  "final debt",
-  Bob,
-  "\n->",
-  Alice,
-  debtSimplifier.getCreditors().get(Alice)?.get(Bob)?.owes,
-  "\n->",
-  John,
-  debtSimplifier.getCreditors().get(John)?.get(Bob)?.owes,
-);
-console.log(
-  "final debt",
-  John,
-  "\n->",
-  Alice,
-  debtSimplifier.getCreditors().get(Alice)?.get(John)?.owes,
-  "\n->",
-  Bob,
-  debtSimplifier.getCreditors().get(Bob)?.get(John)?.owes,
-);
