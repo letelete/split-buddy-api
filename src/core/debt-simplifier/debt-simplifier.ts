@@ -109,7 +109,7 @@ export class DebtSimplifier {
     );
     let debtBIndex = debtBRightmostIndexForX;
     let debtBIndexPrefixSum = B.debts
-      .slice(0, debtBIndex)
+      .slice(0, debtBIndex + 1)
       .reduce((sum, debt) => sum + this.getDebtAmount(debt), 0);
 
     while (X > 0) {
@@ -184,11 +184,20 @@ export class DebtSimplifier {
       throw new Error(`Debt for expense ${toExpenseId} has not been created.`);
     }
 
-    debt.history.push({
-      expenseId: fromExpenseId,
-      grants,
-      amount: debtor.owes + grants,
-    });
+    const previousHistoryEntry = debt.history.at(-1);
+    if (previousHistoryEntry) {
+      debt.history.push({
+        expenseId: fromExpenseId,
+        grants,
+        amount: previousHistoryEntry.amount + grants,
+      });
+    } else {
+      debt.history.push({
+        expenseId: fromExpenseId,
+        grants,
+        amount: grants,
+      });
+    }
 
     debtor.owes += grants;
   }
